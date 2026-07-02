@@ -1,9 +1,6 @@
-# Caddy TLS reverse proxy in front of boringd (public endpoint).
-# sslip.io resolves 162-43-188-89.sslip.io -> the box IP, so Caddy gets a real
-# Let's Encrypt cert and terminates HTTPS/WSS. boringd binds 127.0.0.1:8080
+# Public TLS reverse proxy for boringd. api.boringcomputers.com is canonical;
+# the sslip.io host is kept as a fallback. boringd binds 127.0.0.1:8080
 # (BORING_ADDR) so it is only reachable through this proxy.
-#
-# Swap the hostname for your own domain once DNS points at the box.
-162-43-188-89.sslip.io {
+api.boringcomputers.com, 162-43-188-89.sslip.io {
 	reverse_proxy 127.0.0.1:8080
 }
