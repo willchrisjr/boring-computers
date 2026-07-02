@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { apiBase, wsUrl } from '$lib/boring';
 
 	type Machine = { id: string; mode: string; boot_ms: number; display: boolean };
 	type Phase = 'idle' | 'booting' | 'connecting' | 'live' | 'closed' | 'error';
@@ -30,7 +31,7 @@
 		phase = 'booting';
 		error = '';
 		try {
-			const res = await fetch('/boring/v1/machines', {
+			const res = await fetch(`${apiBase}/v1/machines`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ template: 'desktop', ttl_seconds: TTL })
@@ -69,8 +70,7 @@
 		const { default: RFB } = await import('@novnc/novnc');
 		if (disposed) return;
 		teardownRfb();
-		const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-		const url = `${proto}://${location.host}/boring/v1/machines/${machine.id}/vnc`;
+		const url = wsUrl(`/v1/machines/${machine.id}/vnc`);
 		try {
 			rfb = new RFB(screen, url, {});
 			rfb.scaleViewport = true;
@@ -121,7 +121,7 @@
 		}
 		rfb = null;
 		if (machine) {
-			void fetch(`/boring/v1/machines/${machine.id}`, { method: 'DELETE' }).catch(() => {});
+			void fetch(`${apiBase}/v1/machines/${machine.id}`, { method: 'DELETE' }).catch(() => {});
 		}
 		machine = null;
 		phase = 'idle';

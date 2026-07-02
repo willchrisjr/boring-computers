@@ -15,6 +15,10 @@ type Config struct {
 	// routes (and ?token= on the WebSocket route). /healthz is always open.
 	Token string
 
+	// CORSOrigin is sent as Access-Control-Allow-Origin so a browser on another
+	// origin (the deployed site) can call the public endpoint. "" disables CORS.
+	CORSOrigin string
+
 	// MaxMachines caps the number of live machines; creation returns 429 when full.
 	MaxMachines int
 
@@ -58,6 +62,7 @@ func LoadConfig() Config {
 	c := Config{
 		Addr:             envStr("BORING_ADDR", "0.0.0.0:8080"),
 		Token:            os.Getenv("BORING_TOKEN"),
+		CORSOrigin:       envStr("BORING_CORS_ORIGIN", "*"),
 		MaxMachines:      envInt("BORING_MAX", 20),
 		FirecrackerBin:   envStr("BORING_FIRECRACKER_BIN", "/opt/boring/bin/firecracker"),
 		KernelPath:       envStr("BORING_KERNEL", "/opt/boring/kernel/vmlinux"),

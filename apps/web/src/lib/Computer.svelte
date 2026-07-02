@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '@xterm/xterm/css/xterm.css';
 	import { onMount } from 'svelte';
+	import { apiBase, wsUrl } from '$lib/boring';
 
 	type Machine = { id: string; mode: string; boot_ms: number; expires_at: string };
 	type Phase = 'idle' | 'booting' | 'live' | 'closed' | 'error';
@@ -38,7 +39,7 @@
 			const timer = setTimeout(() => ctrl.abort(), 8000);
 			let res: Response;
 			try {
-				res = await fetch('/boring/v1/machines', {
+				res = await fetch(`${apiBase}/v1/machines`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ template: 'python', ttl_seconds: TTL }),
@@ -90,8 +91,7 @@
 		onResize = () => fit?.fit();
 		window.addEventListener('resize', onResize);
 
-		const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-		ws = new WebSocket(`${proto}://${location.host}/boring/v1/machines/${id}/tty`);
+		ws = new WebSocket(wsUrl(`/v1/machines/${id}/tty`));
 		ws.binaryType = 'arraybuffer';
 		const enc = new TextEncoder();
 		ws.onmessage = (e) => {
@@ -139,7 +139,7 @@
 		}
 		ws = null;
 		if (machine) {
-			void fetch(`/boring/v1/machines/${machine.id}`, { method: 'DELETE' }).catch(() => {});
+			void fetch(`${apiBase}/v1/machines/${machine.id}`, { method: 'DELETE' }).catch(() => {});
 		}
 		term?.dispose();
 		term = null;
