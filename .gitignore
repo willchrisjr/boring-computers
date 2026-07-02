@@ -28,3 +28,13 @@ vite.config.ts.timestamp-*
 
 # Playwright
 test-results
+
+# Go build output
+/boringd/boringd
+*.test
+
+# SDK build output
+packages/sdk/dist/
+
+# Claude runtime
+.claude/

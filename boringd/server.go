@@ -1,0 +1,162 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+)
+
+// Server wires the HTTP mux, auth middleware and JSON handlers.
+type Server struct {
+	cfg Config
+	mgr *Manager
+	mux *http.ServeMux
+}
+
+// NewServer builds the router with all routes from the contract.
+func NewServer(cfg Config, mgr *Manager) *Server {
+	s := &Server{cfg: cfg, mgr: mgr, mux: http.NewServeMux()}
+
+	// Open route: health check (never requires auth).
+	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
+
+	// Authenticated /v1 routes.
+	s.mux.Handle("POST /v1/machines", s.auth(http.HandlerFunc(s.handleCreate)))
+	s.mux.Handle("GET /v1/machines", s.auth(http.HandlerFunc(s.handleList)))
+	s.mux.Handle("GET /v1/machines/{id}", s.auth(http.HandlerFunc(s.handleGet)))
+	s.mux.Handle("DELETE /v1/machines/{id}", s.auth(http.HandlerFunc(s.handleDelete)))
+	s.mux.Handle("POST /v1/machines/{id}/branch", s.auth(http.HandlerFunc(s.handleBranch)))
+
+	// WebSocket TTY. Auth is handled inside (accepts ?token= too).
+	s.mux.HandleFunc("GET /v1/machines/{id}/tty", s.handleTTY)
+
+	return s
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mux.ServeHTTP(w, r)
+}
+
+// auth is middleware enforcing the Bearer token on /v1/* routes when a token is
+// configured. It does not apply to /healthz.
+func (s *Server) auth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.authorized(r) {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// authorized returns true if the request carries the correct token, or if no
+// token is configured. Accepts both the Authorization header and ?token=.
+func (s *Server) authorized(r *http.Request) bool {
+	if s.cfg.Token == "" {
+		return true
+	}
+	if h := r.Header.Get("Authorization"); h != "" {
+		if strings.HasPrefix(h, "Bearer ") {
+			if strings.TrimSpace(strings.TrimPrefix(h, "Bearer ")) == s.cfg.Token {
+				return true
+			}
+		}
+	}
+	if q := r.URL.Query().Get("token"); q != "" && q == s.cfg.Token {
+		return true
+	}
+	return false
+}
+
+// ---- handlers ----
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	_, err := os.Stat("/dev/kvm")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"machines": s.mgr.Count(),
+		"kvm":      err == nil,
+	})
+}
+
+type createRequest struct {
+	Template   string `json:"template"`
+	TTLSeconds int    `json:"ttl_seconds"`
+}
+
+func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
+	var req createRequest
+	if r.Body != nil {
+		// Ignore decode errors: an empty body means defaults.
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req.Template == "" {
+		req.Template = "python"
+	}
+
+	m, err := s.mgr.Create(req.Template, req.TTLSeconds)
+	if err != nil {
+		if errors.Is(err, ErrTooManyMachines) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error()})
+			return
+		}
+		log.Printf("create failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, m.View())
+}
+
+func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
+	views := s.mgr.List()
+	writeJSON(w, http.StatusOK, map[string]any{"machines": views})
+}
+
+func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	view, ok := s.mgr.Get(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !s.mgr.Destroy(id) {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleBranch(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	m, err := s.mgr.Branch(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrNotFound):
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+		case errors.Is(err, ErrTooManyMachines):
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error()})
+		case errors.Is(err, ErrSnapshotUnavailable):
+			writeJSON(w, http.StatusNotImplemented, map[string]any{"error": err.Error()})
+		default:
+			log.Printf("branch failed: %v", err)
+			writeJSON(w, http.StatusNotImplemented, map[string]any{"error": err.Error()})
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, m.View())
+}
+
+// writeJSON writes a JSON response with the given status code.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}

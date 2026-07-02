@@ -1,0 +1,27 @@
+{
+	"name": "@boring/sdk",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"prettier": "@boring/prettier-config",
+	"scripts": {
+		"check": "tsc --noEmit",
+		"build": "tsc",
+		"lint": "prettier --check .",
+		"format": "prettier --write ."
+	},
+	"devDependencies": {
+		"typescript": "^6.0.3",
+		"@boring/typescript-config": "*",
+		"@boring/prettier-config": "*",
+		"@types/node": "^24"
+	}
+}
