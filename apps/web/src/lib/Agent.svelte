@@ -2,42 +2,33 @@
 	import { onMount } from 'svelte';
 	import { apiBase, wsUrl, createMachine, type Machine } from '$lib/boring';
 
-	type Phase = 'booting' | 'connecting' | 'live' | 'done' | 'error';
+	type Phase = 'compose' | 'booting' | 'connecting' | 'live' | 'done' | 'error';
 
 	let { onClose }: { onClose?: () => void } = $props();
 
-	// A rotating set of tasks so repeat viewers see something different. `label`
-	// is shown as the opening caption; `goal` is sent to the agent.
-	const TASKS = [
-		{
-			label: 'compute 47 × 89 on the calculator',
-			goal: 'Use the on-screen calculator (the xcalc window) to compute 47 times 89 by clicking its buttons: 4, 7, *, 8, 9, =. Do NOT use the terminal. When the answer appears on the calculator display, tell me the number.'
-		},
-		{
-			label: 'add 128 + 256 on the calculator',
-			goal: 'Use the on-screen calculator (the xcalc window) to add 128 and 256 by clicking its buttons: 1, 2, 8, +, 2, 5, 6, =. Do NOT use the terminal. Read the answer from the display and tell me.'
-		},
-		{
-			label: 'print a big ASCII "BORING" banner in the terminal',
-			goal: 'Click the terminal window to focus it, then type the command  figlet -c BORING  and run it to print a big ASCII banner. Then run  date . Tell me what appeared.'
-		},
-		{
-			label: 'print a big ASCII "HELLO" banner in the terminal',
-			goal: 'Click the terminal window to focus it, then type the command  figlet HELLO  and run it to print a big ASCII banner. Then tell me what it drew.'
-		}
+	// Short, friendly prompts the visitor can click to fill the box. The desktop
+	// is minimal (terminal + calculator + clock), so these steer toward things it
+	// can actually do — but the box is free-form; the AI does its best with anything.
+	const SUGGESTIONS = [
+		'Open the calculator and compute 47 × 89',
+		'Print a big ASCII "BORING" banner in the terminal',
+		'Add 1234 and 5678 on the calculator, then read the answer',
+		'In the terminal, show today’s date and a cheerful message',
+		'Use the calculator to work out 256 ÷ 8'
 	];
-	const task = TASKS[Math.floor(Math.random() * TASKS.length)];
-	const GOAL = task.goal;
+
 	const TTL = 240;
 	const MAX_ATTEMPTS = 10;
 
-	let phase = $state<Phase>('booting');
+	let phase = $state<Phase>('compose');
+	let goal = $state(SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)]);
+	let activeGoal = $state('');
 	let machine = $state<Machine | null>(null);
 	let error = $state('');
-	let caption = $state(`The AI will ${task.label}. Booting a computer…`);
-	let log = $state<{ kind: string; text: string }[]>([]);
+	let caption = $state('');
+	let inputEl = $state<HTMLTextAreaElement>();
 
-	let screen: HTMLDivElement;
+	let screen = $state<HTMLDivElement>();
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let rfb: any = null;
 	let ws: WebSocket | null = null;
@@ -46,11 +37,21 @@
 	let agentStarted = false;
 
 	onMount(() => {
-		void launch();
+		inputEl?.focus();
 		return () => close();
 	});
 
+	function run() {
+		const g = goal.trim();
+		if (!g || phase !== 'compose') return;
+		activeGoal = g;
+		caption = 'Booting a computer for the AI…';
+		void launch();
+	}
+
 	async function launch() {
+		phase = 'booting';
+		error = '';
 		try {
 			machine = await createMachine('desktop', TTL);
 			phase = 'connecting';
@@ -75,7 +76,7 @@
 	}
 
 	async function connectVNC() {
-		if (disposed || !machine) return;
+		if (disposed || !machine || !screen) return;
 		attempts += 1;
 		const { default: RFB } = await import('@novnc/novnc');
 		if (disposed) return;
@@ -105,7 +106,9 @@
 		agentStarted = true;
 		phase = 'live';
 		caption = 'The AI is looking at the screen…';
-		ws = new WebSocket(wsUrl(`/v1/machines/${machine.id}/agent?goal=${encodeURIComponent(GOAL)}`));
+		ws = new WebSocket(
+			wsUrl(`/v1/machines/${machine.id}/agent?goal=${encodeURIComponent(activeGoal)}`)
+		);
 		ws.onmessage = (e) => {
 			let m: { type: string; text?: string };
 			try {
@@ -115,9 +118,6 @@
 			}
 			if (m.type === 'say' && m.text) {
 				caption = m.text;
-				log = [...log, { kind: 'say', text: m.text }].slice(-6);
-			} else if (m.type === 'action' && m.text) {
-				log = [...log, { kind: 'action', text: m.text }].slice(-6);
 			} else if (m.type === 'done') {
 				phase = 'done';
 				caption = m.text || 'The AI finished the task.';
@@ -158,48 +158,99 @@
 	function onKey(e: KeyboardEvent) {
 		if (e.key === 'Escape') close();
 	}
+	function onInputKey(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			run();
+		}
+	}
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 <div class="w-full max-w-3xl">
-	<div
-		class="flex items-center justify-between rounded-t-geist-lg border border-line bg-surface px-4 py-2.5 font-mono text-[12px]"
-	>
-		<div class="flex items-center gap-2 text-ink-muted">
-			{#if phase === 'booting' || phase === 'connecting'}
-				<span class="size-1.5 animate-pulse rounded-full bg-ink-subtle"></span>preparing a computer…
-			{:else if phase === 'live'}
-				<span class="size-1.5 animate-pulse rounded-full bg-accent"></span>
-				<span class="text-ink">an AI is using this computer</span>
-			{:else if phase === 'done'}
-				<span class="size-1.5 rounded-full bg-success"></span>finished
-			{:else if phase === 'error'}
-				<span class="size-1.5 rounded-full bg-danger"></span>
-				<span class="text-danger">{error}</span>
+	{#if phase === 'compose'}
+		<!-- Compose: tell the AI what to do -->
+		<div class="rounded-geist-lg border border-line bg-surface p-4">
+			<div class="mb-2 flex items-center gap-2 font-mono text-[12px] text-ink-muted">
+				<span class="text-accent">✦</span> Tell the AI what to do on the computer
+			</div>
+			<textarea
+				bind:this={inputEl}
+				bind:value={goal}
+				onkeydown={onInputKey}
+				rows="2"
+				maxlength="220"
+				placeholder="e.g. open the calculator and compute 128 × 64"
+				class="w-full resize-none rounded-geist border border-line bg-black px-3 py-2 font-mono text-[13px] text-ink placeholder:text-ink-faint focus:border-white/25 focus:outline-none"
+			></textarea>
+			<div class="mt-3 flex flex-wrap gap-1.5">
+				{#each SUGGESTIONS as s (s)}
+					<button
+						onclick={() => (goal = s)}
+						class="rounded-full border border-line px-2.5 py-1 font-mono text-[11px] text-ink-subtle transition-colors hover:border-white/25 hover:text-ink"
+					>
+						{s}
+					</button>
+				{/each}
+			</div>
+			<div class="mt-3 flex items-center justify-between">
+				<span class="font-mono text-[11px] text-ink-faint"
+					>this computer has a terminal, a calculator, and a clock</span
+				>
+				<button
+					onclick={run}
+					disabled={!goal.trim()}
+					class="rounded-geist bg-ink px-3 py-1.5 font-mono text-[12px] text-black transition-opacity hover:opacity-90 disabled:opacity-40"
+				>
+					Run it →
+				</button>
+			</div>
+		</div>
+	{:else}
+		<!-- Live: view-only desktop + caption -->
+		<div
+			class="flex items-center justify-between rounded-t-geist-lg border border-line bg-surface px-4 py-2.5 font-mono text-[12px]"
+		>
+			<div class="flex items-center gap-2 text-ink-muted">
+				{#if phase === 'booting' || phase === 'connecting'}
+					<span class="size-1.5 animate-pulse rounded-full bg-ink-subtle"></span>preparing a
+					computer…
+				{:else if phase === 'live'}
+					<span class="size-1.5 animate-pulse rounded-full bg-accent"></span>
+					<span class="text-ink">an AI is using this computer</span>
+				{:else if phase === 'done'}
+					<span class="size-1.5 rounded-full bg-success"></span>finished
+				{:else if phase === 'error'}
+					<span class="size-1.5 rounded-full bg-danger"></span>
+					<span class="text-danger">{error}</span>
+				{/if}
+			</div>
+			<button class="text-ink-subtle transition-colors hover:text-ink" onclick={close}>esc ✕</button
+			>
+		</div>
+		<div
+			class="relative overflow-hidden border-x border-line bg-black"
+			class:hidden={phase === 'error'}
+		>
+			<div bind:this={screen} class="aspect-[16/10] w-full"></div>
+			{#if phase !== 'live' && phase !== 'done'}
+				<div
+					class="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[12px] text-ink-subtle"
+				>
+					allocating a computer…
+				</div>
 			{/if}
 		</div>
-		<button class="text-ink-subtle transition-colors hover:text-ink" onclick={close}>esc ✕</button>
-	</div>
-	<div
-		class="relative overflow-hidden border-x border-line bg-black"
-		class:hidden={phase === 'error'}
-	>
-		<div bind:this={screen} class="aspect-[16/10] w-full"></div>
-		{#if phase !== 'live' && phase !== 'done'}
-			<div
-				class="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[12px] text-ink-subtle"
-			>
-				allocating a computer…
+		<div
+			class="flex items-start gap-2.5 rounded-b-geist-lg border border-t-0 border-line bg-surface px-4 py-3 font-mono text-[12px]"
+			class:hidden={phase === 'error'}
+		>
+			<span class="mt-px shrink-0 text-accent">✦</span>
+			<div class="min-w-0 leading-relaxed">
+				<div class="truncate text-ink-faint">task: {activeGoal}</div>
+				<div class="text-ink-muted">{caption}</div>
 			</div>
-		{/if}
-	</div>
-	<!-- caption strip: the AI narrates what it's doing -->
-	<div
-		class="flex items-start gap-2.5 rounded-b-geist-lg border border-t-0 border-line bg-surface px-4 py-3 font-mono text-[12px]"
-		class:hidden={phase === 'error'}
-	>
-		<span class="mt-px shrink-0 text-accent">✦</span>
-		<span class="leading-relaxed text-ink-muted">{caption}</span>
-	</div>
+		</div>
+	{/if}
 </div>
