@@ -61,8 +61,11 @@ curl -s -X POST ${API}/v1/machines \\
 	</div>
 	<p class="mt-3 text-[13px] leading-relaxed text-ink-muted">
 		Templates: <span class="text-ink">python</span> (headless shell, snapshot, ~3&nbsp;ms) and
-		<span class="text-ink">desktop</span> (GUI over VNC). <code class="text-ink">ttl_seconds</code> is
-		clamped to 15–900.
+		<span class="text-ink">desktop</span> (GUI over VNC). <code class="text-ink">ttl_seconds</code>
+		is clamped to 15–900. Pass <code class="text-ink">"net": true</code> to give the machine
+		internet (cold-boots instead of snapshot; <code class="text-ink">pip</code>/<code
+			class="text-ink">npm</code
+		>/<code class="text-ink">apk</code> install work). Guests are NAT'd and egress-firewalled.
 	</p>
 
 	<h2 class="mt-12 text-[15px] font-semibold text-ink">WebSockets</h2>

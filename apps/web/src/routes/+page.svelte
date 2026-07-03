@@ -29,7 +29,7 @@
 	const PRODUCTS = [
 		{
 			name: 'Sandboxes',
-			desc: 'Headless microVMs with a serial console. python3 + node, ready in milliseconds.',
+			desc: 'Headless microVMs with a serial console. python3 + node, milliseconds to boot, opt-in internet (pip · npm).',
 			live: true
 		},
 		{
