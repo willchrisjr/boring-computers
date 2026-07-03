@@ -15,12 +15,13 @@ set -euo pipefail
 BORING_ROOT="/opt/boring"
 ROOTFS_DIR="${BORING_ROOT}/rootfs"
 IMG="${ROOTFS_DIR}/desktop.ext4"
-IMG_SIZE_MB="${IMG_SIZE_MB:-2048}"
+IMG_SIZE_MB="${IMG_SIZE_MB:-6144}"   # room for chromium + node + coding agents
 SUITE="${SUITE:-bookworm}"
 MIRROR="${MIRROR:-http://deb.debian.org/debian}"
 # xcalc/xclock come from x11-apps; figlet for banners. (galculator was dropped —
-# its GTK/dconf-service chain breaks a minbase debootstrap.)
-PKGS="xvfb,x11vnc,openbox,xterm,x11-xserver-utils,xfonts-base,x11-apps,figlet,socat,ca-certificates,procps,iproute2"
+# its GTK/dconf-service chain breaks a minbase debootstrap.) chromium + node +
+# the coding-agent CLIs are installed in the chroot below, not via debootstrap.
+PKGS="xvfb,x11vnc,openbox,xterm,x11-xserver-utils,xfonts-base,x11-apps,fonts-liberation,figlet,socat,ca-certificates,curl,git,xz-utils,procps,iproute2"
 
 log()  { printf '\033[1;34m[desktop]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[desktop:error]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -51,18 +52,41 @@ log "debootstrap ${SUITE} (minbase + desktop packages)..."
 debootstrap --variant=minbase --include="${PKGS}" "${SUITE}" "${MNT}" "${MIRROR}" \
   || die "debootstrap failed"
 
-log "Configuring guest..."
+log "Configuring guest (chromium + node 22 + coding agents)..."
+cp -f /etc/resolv.conf "${MNT}/etc/resolv.conf"   # DNS for apt/npm inside chroot
 mount -t proc proc "${MNT}/proc"
 mount -t sysfs sysfs "${MNT}/sys"
 mount --bind /dev "${MNT}/dev"
+mount -t devpts devpts "${MNT}/dev/pts" 2>/dev/null || true   # apt/chromium postinst want it
 
 chroot "${MNT}" /bin/sh -eux <<'CHROOT_EOF'
 export DEBIAN_FRONTEND=noninteractive
 passwd -d root || true
 echo boring > /etc/hostname
-# Trim apt caches to keep the image lean.
+
+# A real browser for the desktop.
+apt-get update
+apt-get install -y --no-install-recommends chromium
+
+# Node 22 (glibc) from the official tarball — the coding-agent CLIs need >=22.
+NODEFILE=$(curl -fsSL https://nodejs.org/dist/latest-v22.x/ | grep -oE 'node-v22\.[0-9.]+-linux-x64\.tar\.xz' | head -1)
+curl -fsSL "https://nodejs.org/dist/latest-v22.x/${NODEFILE}" -o /tmp/node.tar.xz
+tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
+rm -f /tmp/node.tar.xz
+export PATH=/usr/local/bin:$PATH
+
+# Coding-agent CLIs (users bring their own keys). Best-effort each so one flaky
+# postinstall doesn't sink the whole image.
+npm install -g @anthropic-ai/claude-code || true
+npm install -g @openai/codex || true
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent || true
+# Cursor ships its own installer (no npm package); it drops cursor-agent under
+# ~/.local — symlink it onto PATH.
+curl https://cursor.com/install -fsS | bash || true
+CA=$(find /root -name cursor-agent -type f 2>/dev/null | head -1); [ -n "$CA" ] && ln -sf "$CA" /usr/local/bin/cursor-agent || true
+
 apt-get clean
-rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* 2>/dev/null || true
+rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /tmp/* 2>/dev/null || true
 CHROOT_EOF
 
 # --- PID1 startup: bring up X + VNC + vsock bridge, print the boot marker -----
@@ -80,6 +104,8 @@ mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 hostname boring 2>/dev/null
 # Firecracker guests boot with loopback DOWN; x11vnc + socat talk over 127.0.0.1.
 ip link set lo up 2>/dev/null || true
+# eth0 is configured by the kernel (ip=dhcp); publish its DNS so the browser works.
+cat /proc/net/pnp > /etc/resolv.conf 2>/dev/null || echo "nameserver 1.1.1.1" > /etc/resolv.conf
 export HOME=/root DISPLAY=:0
 
 Xvfb :0 -screen 0 1280x800x24 -ac -nolisten tcp >/var/log/xvfb.log 2>&1 &
@@ -87,12 +113,14 @@ i=0; while [ ! -S /tmp/.X11-unix/X0 ] && [ "$i" -lt 100 ]; do i=$((i+1)); sleep 
 
 xsetroot -solid "#0b0b0c" 2>/dev/null
 openbox >/var/log/openbox.log 2>&1 &
-# Terminal (top-left), calculator (center, sized up so buttons are easy to hit),
-# clock (top-right). xcalc is an Xt app and honours -geometry.
-xterm -fa "DejaVu Sans Mono" -fs 11 -geometry 60x20+32+40 -bg "#0e0e0e" -fg "#ededed" \
-  -title "boring computers" -e /bin/sh -c 'echo "boring computers . desktop microVM"; echo "type figlet <word> for a big banner"; echo; exec /bin/sh' >/dev/null 2>&1 &
-xclock -update 1 -geometry 150x150+1090+40 >/dev/null 2>&1 &
-xcalc -geometry 330x420+650+150 >/var/log/xcalc.log 2>&1 &
+# A real browser (main window), a dev terminal that advertises the coding agents,
+# and the calculator (kept for the computer-use agent demo). xcalc honours -geometry.
+chromium --no-sandbox --test-type --disable-dev-shm-usage --disable-gpu --no-first-run \
+  --disable-features=Translate --password-store=basic --user-data-dir=/root/.chromium \
+  --window-size=900,600 --window-position=16,20 https://duckduckgo.com >/var/log/chromium.log 2>&1 &
+xterm -fa "DejaVu Sans Mono" -fs 10 -geometry 108x13+16+648 -bg "#0e0e0e" -fg "#ededed" \
+  -title "boring computers" -e /bin/sh -c 'echo "boring computers . desktop microVM"; echo "coding agents ready:  claude   codex   cursor-agent   pi   (bring your own key)"; echo; exec /bin/sh' >/dev/null 2>&1 &
+xcalc -geometry 300x400+956+20 >/var/log/xcalc.log 2>&1 &
 x11vnc -display :0 -forever -shared -nopw -rfbport 5900 -noxdamage -quiet >/var/log/x11vnc.log 2>&1 &
 
 # Bridge guest vsock port 5900 -> local VNC. The host connects via the vsock UDS.
@@ -103,11 +131,12 @@ exec /bin/sh
 INIT_EOF
 chmod +x "${MNT}/sbin/boring-init"
 
+umount "${MNT}/dev/pts" 2>/dev/null || true   # nested under /dev; unmount first
 umount "${MNT}/proc" 2>/dev/null || true
 umount "${MNT}/sys" 2>/dev/null || true
 umount "${MNT}/dev" 2>/dev/null || true
 
 sync
-umount "${MNT}"
+umount "${MNT}" 2>/dev/null || umount -l "${MNT}"
 e2fsck -fy "${IMG}" >/dev/null 2>&1 || true
 log "Desktop rootfs built: ${IMG} ($(du -h "${IMG}" | cut -f1))"

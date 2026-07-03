@@ -24,7 +24,7 @@ func (c Config) Template(name string) Template {
 		return Template{
 			Name:      "desktop",
 			Rootfs:    c.DesktopRootfs,
-			MemSizeMB: 1024,
+			MemSizeMB: 2560, // chromium + a coding agent need headroom
 			VCPUs:     2,
 			InitPath:  "/sbin/boring-init",
 			Vsock:     true,
