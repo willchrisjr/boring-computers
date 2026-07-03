@@ -36,6 +36,9 @@ type Machine struct {
 	// creatorIP holds the limiter slot to release when the machine dies.
 	creatorIP string
 
+	// pooled: pre-booted, waiting in the warm pool (not yet handed to a user).
+	pooled bool
+
 	// driver owns the firecracker child process, stdio console and API socket.
 	driver *fcDriver
 
@@ -77,6 +80,10 @@ type Manager struct {
 	mu       sync.Mutex
 	machines map[string]*Machine
 	stopCh   chan struct{}
+
+	// Warm pool of pre-booted desktops + count currently warming (both under mu).
+	pool    []*Machine
+	warming int
 }
 
 // NewManager constructs an empty Manager with per-IP limiting and cgroup caps.
@@ -90,11 +97,17 @@ func NewManager(cfg Config) *Manager {
 	}
 }
 
-// Count returns the number of live machines.
+// Count returns the number of live user machines (warm-pool desktops excluded).
 func (mgr *Manager) Count() int {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	return len(mgr.machines)
+	n := 0
+	for _, m := range mgr.machines {
+		if !m.pooled {
+			n++
+		}
+	}
+	return n
 }
 
 // Get returns a JSON view of a machine by id, built under the lock so it never
@@ -182,6 +195,9 @@ func (mgr *Manager) List() []machineView {
 	defer mgr.mu.Unlock()
 	out := make([]machineView, 0, len(mgr.machines))
 	for _, m := range mgr.machines {
+		if m.pooled {
+			continue // warm-pool desktops aren't user machines
+		}
 		out = append(out, m.View())
 	}
 	return out
@@ -195,6 +211,15 @@ func (mgr *Manager) Create(template string, ttlSeconds int, net bool, creatorIP 
 	// Per-IP rate + concurrency cap (released in teardown).
 	if err := mgr.limiter.Acquire(creatorIP); err != nil {
 		return nil, err
+	}
+
+	// Instant desktop: hand over a pre-booted one from the warm pool if ready.
+	if mgr.cfg.Template(template).Display && mgr.cfg.DesktopPool > 0 {
+		if m := mgr.claimPooled(creatorIP, ttl); m != nil {
+			go mgr.refillPool()
+			log.Printf("machine %s claimed from warm pool (ttl=%ds ip=%s)", m.ID, ttl, creatorIP)
+			return m, nil
+		}
 	}
 
 	// Reserve a slot + id under the lock, but perform the (slow) boot outside it.
@@ -403,10 +428,21 @@ func (mgr *Manager) reap(id string) {
 		return
 	}
 	delete(mgr.machines, id)
+	mgr.removePooledLocked(id)
 	mgr.mu.Unlock()
 
 	mgr.teardown(m)
 	log.Printf("machine %s expired (ttl)", id)
+}
+
+// removePooledLocked drops a machine from the warm pool (caller holds mu).
+func (mgr *Manager) removePooledLocked(id string) {
+	for i, p := range mgr.pool {
+		if p.ID == id {
+			mgr.pool = append(mgr.pool[:i], mgr.pool[i+1:]...)
+			return
+		}
+	}
 }
 
 // rollback removes a reserved slot and is used when boot/branch fails.
@@ -441,6 +477,7 @@ func (mgr *Manager) teardown(m *Machine) {
 // StartReaper starts a background sweep as a safety net for any timers that were
 // missed (the per-machine AfterFunc is the primary mechanism).
 func (mgr *Manager) StartReaper() {
+	mgr.refillPool() // start warming the pool immediately
 	go func() {
 		t := time.NewTicker(5 * time.Second)
 		defer t.Stop()
@@ -449,6 +486,7 @@ func (mgr *Manager) StartReaper() {
 			case <-mgr.stopCh:
 				return
 			case <-t.C:
+				mgr.refillPool() // keep the pool topped up (recovers from failures)
 				now := time.Now()
 				var expired []string
 				mgr.mu.Lock()

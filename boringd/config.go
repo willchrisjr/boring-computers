@@ -59,6 +59,9 @@ type Config struct {
 	PreviewBase string // e.g. 162-43-188-89.sslip.io ("" disables previews)
 	LeasesPath  string // dnsmasq lease file, for guest IP lookup
 
+	// Warm pool: keep this many desktops pre-booted so a request is instant.
+	DesktopPool int
+
 	// Inference gateway: an OpenAI-compatible /v1/chat/completions that routes
 	// Claude models to Anthropic natively and everything else to OpenRouter.
 	// Enabled when either key is set. Both may be set at once.
@@ -110,6 +113,7 @@ func LoadConfig() Config {
 		NetSubnet:           envStr("BORING_NET_SUBNET", "10.200.0"),
 		PreviewBase:         envStr("BORING_PREVIEW_BASE", "162-43-188-89.sslip.io"),
 		LeasesPath:          envStr("BORING_LEASES", "/var/lib/misc/dnsmasq.leases"),
+		DesktopPool:         envInt("BORING_DESKTOP_POOL", 1),
 		OpenRouterKey:       os.Getenv("BORING_OPENROUTER_KEY"),
 		InferenceMaxTokens:  envInt("BORING_INFER_MAX_TOKENS", 1024),
 		InferenceRatePerMin: envInt("BORING_INFER_RATE", 20),

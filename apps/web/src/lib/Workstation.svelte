@@ -154,9 +154,10 @@
 			phase = 'connecting';
 			startCountdown();
 			void openTerminal(machine.id); // the serial shell is up early
-			// The desktop cold-boots X + chromium over a few seconds; a reconnect is
-			// already painted.
-			setTimeout(connectVNC, machineId ? 400 : 4500);
+			// A reconnect or a warm-pool desktop is already painted → connect fast;
+			// a fresh cold boot needs a few seconds for X + chromium to paint.
+			const painted = machineId || machine.mode === 'warm';
+			setTimeout(connectVNC, painted ? 400 : 4500);
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 			phase = 'error';
