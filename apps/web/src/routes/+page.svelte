@@ -29,12 +29,12 @@
 	const PRODUCTS = [
 		{
 			name: 'Sandboxes',
-			desc: 'Headless microVMs with a serial console. python3 + node, milliseconds to boot, opt-in internet (pip · npm).',
+			desc: 'Headless microVMs with a serial console + an AI that drives them. python3 · node · claude, milliseconds to boot, opt-in internet.',
 			live: true
 		},
 		{
 			name: 'Computers',
-			desc: 'Full Linux desktops streamed to your browser over VNC.',
+			desc: 'Full Linux desktops over VNC — a real browser plus claude, codex, cursor & pi preinstalled.',
 			live: true
 		},
 		{
@@ -166,7 +166,7 @@
 						onclick={() => (mode = 'desktop')}
 						class="font-mono text-[12px] text-ink-faint transition-colors hover:text-ink-muted focus-visible:outline-none"
 					>
-						or spin up a full desktop →
+						or a full desktop — browser + coding agents →
 					</button>
 					<button
 						onclick={() => (mode = 'agent')}
