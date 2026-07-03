@@ -266,21 +266,33 @@
 		}, 40);
 	}
 
-	// --- AI prompt box (computer-use agent on this desktop) ---
+	// --- AI prompt box ---
+	// "drive" hands the machine to the computer-use agent (clicks the screen);
+	// "build" hands it to the terminal agent (writes + runs code, ships a preview).
+	let agentMode = $state<'drive' | 'build'>('build');
+	let previewLink = $state('');
+
 	function runAgent() {
 		const g = goal.trim();
 		if (!g || agentRunning || !machine || phase !== 'live') return;
+		const build = agentMode === 'build';
 		agentRunning = true;
-		agentLine = 'looking at the screen…';
-		tab = 'desktop';
-		if (rfb) rfb.viewOnly = true; // the AI drives; you watch
-		const w = new WebSocket(
-			wsUrl(`/v1/machines/${machine.id}/agent?goal=${encodeURIComponent(g)}`)
-		);
+		previewLink = '';
+		agentLine = build ? 'getting to work…' : 'looking at the screen…';
+		if (build) {
+			showTerminal();
+		} else {
+			tab = 'desktop';
+			if (rfb) rfb.viewOnly = true; // the AI drives; you watch
+		}
+		const path = build
+			? `/v1/machines/${machine.id}/shell-agent?goal=${encodeURIComponent(g)}`
+			: `/v1/machines/${machine.id}/agent?goal=${encodeURIComponent(g)}`;
+		const w = new WebSocket(wsUrl(path));
 		agentWs = w;
 		const finish = () => {
 			agentRunning = false;
-			if (rfb) rfb.viewOnly = false;
+			if (!build && rfb) rfb.viewOnly = false;
 		};
 		w.onmessage = (e) => {
 			let m: { type: string; text?: string };
@@ -289,7 +301,9 @@
 			} catch {
 				return;
 			}
-			if (m.type === 'done') {
+			if (m.type === 'preview') {
+				previewLink = m.text ?? '';
+			} else if (m.type === 'done') {
 				agentLine = m.text || 'done ✓';
 				finish();
 				w.close();
@@ -491,11 +505,28 @@
 	<div class="border-t border-line/70 bg-surface px-3 py-2">
 		<div class="flex items-center gap-2">
 			<span class="font-semibold text-accent">AI</span>
+			<!-- mode: build (write + run code, ship a link) vs drive (use the screen) -->
+			<span class="flex overflow-hidden rounded-full border border-line text-[10px]">
+				<button
+					onclick={() => (agentMode = 'build')}
+					class="px-2 py-0.5 transition-colors {agentMode === 'build'
+						? 'bg-white/10 text-ink'
+						: 'text-ink-faint hover:text-ink-muted'}">build</button
+				>
+				<button
+					onclick={() => (agentMode = 'drive')}
+					class="px-2 py-0.5 transition-colors {agentMode === 'drive'
+						? 'bg-white/10 text-ink'
+						: 'text-ink-faint hover:text-ink-muted'}">drive</button
+				>
+			</span>
 			<input
 				bind:value={goal}
 				onkeydown={promptKey}
 				disabled={agentRunning || phase !== 'live'}
-				placeholder="tell your computer what to do — “search Wikipedia for Firecracker and summarize it”"
+				placeholder={agentMode === 'build'
+					? 'describe an app to build — “a snake game” — and I’ll ship you a live link'
+					: 'tell your computer what to do — “search Wikipedia for Firecracker”'}
 				class="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-60"
 			/>
 			<button
@@ -506,10 +537,19 @@
 				{agentRunning ? 'working…' : 'run'}
 			</button>
 		</div>
-		{#if agentLine}
-			<p class="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-muted">
+		{#if agentLine || previewLink}
+			<p class="mt-1.5 flex items-center gap-2 text-[11px] text-ink-muted">
 				{#if agentRunning}<span class="size-1.5 animate-pulse rounded-full bg-accent"></span>{/if}
-				<span class="truncate">{agentLine}</span>
+				<span class="min-w-0 truncate">{agentLine}</span>
+				{#if previewLink}
+					<a
+						href={previewLink}
+						target="_blank"
+						rel="noopener"
+						class="ml-auto shrink-0 rounded-geist bg-accent/15 px-2 py-0.5 font-semibold text-accent transition-colors hover:bg-accent/25"
+						>your app is live → open ↗</a
+					>
+				{/if}
 			</p>
 		{/if}
 	</div>

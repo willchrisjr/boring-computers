@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -18,16 +19,23 @@ import (
 // shell prompt. Narration streams to the browser over the same JSON protocol as
 // the computer-use agent (say / action / done / error).
 
-const shellAgentSystem = `You drive a Linux shell to accomplish the user's goal. This is a LIVE demo on a public website — a real person is watching the terminal as you type.
+const shellAgentSystem = `You build and run things in a Linux computer to accomplish the user's goal. This is a LIVE demo on a public website — a real person is watching the terminal as you type.
 
-The shell is Alpine Linux with python3, pip, node, npm, git, curl and full internet access. You run as root. Use the run_command tool to run ONE command at a time; you get its combined output back.
+The computer has python3, pip, node, npm, git, curl and full internet access; you run as root. Use the run_command tool to run ONE command at a time; you get its combined output back.
 
-Before each command, write ONE short, friendly, first-person sentence about what you're about to do (e.g. "Let me check what Python version is here." or "Installing the requests library now."). One sentence — don't over-explain.
+Before each command, write ONE short, friendly, first-person sentence about what you're doing (e.g. "Writing the server file now." or "Installing express."). One sentence — don't over-explain.
 
-Keep commands non-interactive (use flags like -y, --quiet). Don't run commands that block forever (no top, no servers in the foreground — background them with & if needed). You have a limited number of steps, so be efficient. When the goal is achieved, reply with one sentence starting with "Done:" and stop calling tools.`
+Create files with here-docs, e.g. cat > app.py <<'EOF' … EOF. Keep commands non-interactive (-y, --quiet) and NEVER block the terminal — run servers in the BACKGROUND with & .
+
+If the goal is a web app, site, or server: build it, START it in the background on a port (e.g. python3 -m http.server 8000 & or node server.js &), curl localhost:<port> to confirm it responds, and then in your FINAL message include exactly PORT=<the port> on its own — that gives the user a live link to open.
+
+You have a limited number of steps — be efficient. When done, reply with one sentence starting with "Done:" and stop calling tools.`
+
+const agentPrompt = "@> " // unique PS1 so output capture works on any shell
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\r`)
-var promptRe = regexp.MustCompile(`(?m)^boring:[^\n]*[#$]\s*$`)
+var promptRe = regexp.MustCompile(regexp.QuoteMeta(agentPrompt))
+var portRe = regexp.MustCompile(`PORT=(\d{2,5})`)
 
 func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
 
@@ -90,6 +98,11 @@ func (s *Server) runShellAgent(w http.ResponseWriter, r *http.Request) {
 	_, sub := console.Subscribe()
 	defer console.Unsubscribe(sub)
 
+	// Set a unique prompt so output capture works on any shell (desktop dash
+	// prints "# ", Alpine prints "boring:~#").
+	console.Write([]byte("PS1='" + agentPrompt + "'\n"))
+	time.Sleep(300 * time.Millisecond)
+
 	tool := map[string]any{
 		"name":        "run_command",
 		"description": "Run one shell command in the Linux terminal and get its combined stdout/stderr back.",
@@ -123,6 +136,12 @@ func (s *Server) runShellAgent(w http.ResponseWriter, r *http.Request) {
 			case "text":
 				if t := strings.TrimSpace(b.Text); t != "" {
 					send("say", t)
+					// The agent reports the port it served on → hand back a live link.
+					if m := portRe.FindStringSubmatch(b.Text); m != nil && s.cfg.PreviewBase != "" {
+						if port, _ := strconv.Atoi(m[1]); port > 0 && port < 65536 {
+							send("preview", fmt.Sprintf("https://%s--%d.%s", id, port, s.cfg.PreviewBase))
+						}
+					}
 				}
 			case "tool_use":
 				if stopped() {
