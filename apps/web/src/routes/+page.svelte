@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import Chassis from '$lib/Chassis.svelte';
+	import Launcher from '$lib/Launcher.svelte';
+
+	// Local dev (`npm run dev` against your own boringd) gets the full interactive
+	// console; the public production build is a static open-source showcase.
+	const interactive = import.meta.env.DEV;
 
 	const GITHUB = 'https://github.com/michaelshimeles/boring-computers';
 
@@ -62,25 +67,124 @@
 	/>
 </svelte:head>
 
-<div class="mx-auto max-w-4xl bg-black p-2">
-	<!-- hero -->
-	<section class="flex flex-col px-5 pt-22 pb-12">
-		<div class="flex w-full flex-col gap-10">
-			<div class="flex shrink-0 flex-col gap-4">
-				<h1
-					class="text-[clamp(1rem,3vw,2rem)] font-semibold whitespace-nowrap tracking-[-0.03em] text-ink"
-				>
-					Computers that are
-					<span class="text-ink-subtle">refreshingly boring.</span>
-				</h1>
+{#if interactive}
+	<Launcher />
+{:else}
+	<div class="mx-auto max-w-4xl bg-black p-2">
+		<!-- hero -->
+		<section class="flex flex-col px-5 pt-22 pb-12">
+			<div class="flex w-full flex-col gap-10">
+				<div class="flex shrink-0 flex-col gap-4">
+					<h1
+						class="text-[clamp(1rem,3vw,2rem)] font-semibold whitespace-nowrap tracking-[-0.03em] text-ink"
+					>
+						Computers that are
+						<span class="text-ink-subtle">refreshingly boring.</span>
+					</h1>
 
-				<p class="max-w-lg text-[13px] leading-relaxed text-ink-muted">
-					Instant Firecracker microVMs — a terminal, a real browser, coding agents preinstalled, and
-					an AI that drives them. <span class="text-ink">Open source.</span> Fork it and run your own
-					with your own keys.
+					<p class="max-w-lg text-[13px] leading-relaxed text-ink-muted">
+						Instant Firecracker microVMs — a terminal, a real browser, coding agents preinstalled,
+						and an AI that drives them. <span class="text-ink">Open source.</span> Fork it and run your
+						own with your own keys.
+					</p>
+
+					<div class="flex flex-wrap items-center gap-3 font-mono text-[12px]">
+						<a
+							href={GITHUB}
+							target="_blank"
+							rel="noopener"
+							class="rounded-geist bg-ink px-3 py-1.5 font-semibold text-black transition-opacity hover:opacity-90"
+							>Fork on GitHub ↗</a
+						>
+						<a
+							href={resolve('/docs')}
+							class="rounded-geist border border-line px-3 py-1.5 text-ink-subtle transition-colors hover:text-ink"
+							>Read the docs</a
+						>
+					</div>
+				</div>
+
+				<!-- the self-host quickstart, shown on the screen of the case -->
+				<div class="w-full">
+					<Chassis on={true}>
+						<div class="p-4 font-mono text-[12px] leading-relaxed">
+							<div class="text-ink-muted">
+								<span class="text-ink-faint">$</span> git clone {GITHUB.replace('https://', '')}
+							</div>
+							<div class="text-ink-muted">
+								<span class="text-ink-faint">$</span> cd boring-computers && npm install
+							</div>
+							<div class="text-ink-faint">
+								# add your Anthropic + S3 keys, then run boringd on a KVM box
+							</div>
+							<div class="text-ink-muted"><span class="text-ink-faint">$</span> ./boringd</div>
+							<div class="mt-2 text-success">
+								boring computers · a computer is one HTTP call away
+							</div>
+							<div class="mt-3 text-ink-muted"><span class="text-ink-faint">$</span> {CURL}</div>
+							<div class="text-ink-muted">
+								{RESP}<span
+									class="ml-1 inline-block h-3.5 w-1.5 animate-pulse bg-ink-subtle align-middle"
+								></span>
+							</div>
+						</div>
+					</Chassis>
+				</div>
+			</div>
+		</section>
+
+		<!-- The lineup -->
+		<section class="px-5 py-12">
+			<h2 class="text-[13px] font-semibold tracking-wide text-ink-faint uppercase">The lineup</h2>
+			<div
+				class="mt-6 grid gap-px overflow-hidden rounded-geist-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3"
+			>
+				{#each PRODUCTS as p (p.name)}
+					<div class="flex flex-col bg-black p-6">
+						<h3 class="text-[15px] font-semibold text-ink">{p.name}</h3>
+						<p class="mt-2 text-[13px] leading-relaxed text-ink-muted">{p.desc}</p>
+					</div>
+				{/each}
+				<!-- filler so the empty grid cell stays black instead of showing the bg-line backdrop -->
+				<div class="hidden bg-black sm:block"></div>
+			</div>
+		</section>
+
+		<!-- How it works -->
+		<section class="px-5 py-12">
+			<h2 class="text-[13px] font-semibold tracking-wide text-ink-faint uppercase">How it works</h2>
+			<div class="mt-6 grid gap-8 sm:grid-cols-2">
+				{#each HOW as [title, body] (title)}
+					<div>
+						<h3 class="text-[15px] font-semibold text-ink">{title}</h3>
+						<p class="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{body}</p>
+					</div>
+				{/each}
+			</div>
+		</section>
+
+		<!-- Numbers -->
+		<section class="px-5 py-12">
+			<div class="grid gap-8 sm:grid-cols-3">
+				{#each STATS as [n, label] (label)}
+					<div>
+						<div class="text-[32px] font-semibold tracking-[-0.03em] text-ink">{n}</div>
+						<div class="mt-1 font-mono text-[12px] text-ink-faint">{label}</div>
+					</div>
+				{/each}
+			</div>
+		</section>
+
+		<!-- Run your own -->
+		<section class="px-5 py-12">
+			<div class="rounded-geist-lg border border-line bg-surface p-8">
+				<h2 class="text-[18px] font-semibold tracking-[-0.02em] text-ink">Run your own</h2>
+				<p class="mt-2 max-w-xl text-[13px] leading-relaxed text-ink-muted">
+					It's open source (Apache-2.0) and self-hosted — bring your own Anthropic + S3 keys, point
+					it at a Linux box with <code class="text-ink">/dev/kvm</code>, and deploy the site at your
+					own endpoint. Nothing phones home.
 				</p>
-
-				<div class="flex flex-wrap items-center gap-3 font-mono text-[12px]">
+				<div class="mt-5 flex flex-wrap items-center gap-3 font-mono text-[12px]">
 					<a
 						href={GITHUB}
 						target="_blank"
@@ -88,124 +192,31 @@
 						class="rounded-geist bg-ink px-3 py-1.5 font-semibold text-black transition-opacity hover:opacity-90"
 						>Fork on GitHub ↗</a
 					>
-					<a
-						href={resolve('/docs')}
-						class="rounded-geist border border-line px-3 py-1.5 text-ink-subtle transition-colors hover:text-ink"
-						>Read the docs</a
+					<a href={resolve('/docs')} class="text-ink-subtle transition-colors hover:text-ink"
+						>setup & API docs →</a
 					>
 				</div>
 			</div>
+		</section>
 
-			<!-- the self-host quickstart, shown on the screen of the case -->
-			<div class="w-full">
-				<Chassis on={true}>
-					<div class="p-4 font-mono text-[12px] leading-relaxed">
-						<div class="text-ink-muted">
-							<span class="text-ink-faint">$</span> git clone {GITHUB.replace('https://', '')}
-						</div>
-						<div class="text-ink-muted">
-							<span class="text-ink-faint">$</span> cd boring-computers && npm install
-						</div>
-						<div class="text-ink-faint">
-							# add your Anthropic + S3 keys, then run boringd on a KVM box
-						</div>
-						<div class="text-ink-muted"><span class="text-ink-faint">$</span> ./boringd</div>
-						<div class="mt-2 text-success">boring computers · a computer is one HTTP call away</div>
-						<div class="mt-3 text-ink-muted"><span class="text-ink-faint">$</span> {CURL}</div>
-						<div class="text-ink-muted">
-							{RESP}<span
-								class="ml-1 inline-block h-3.5 w-1.5 animate-pulse bg-ink-subtle align-middle"
-							></span>
-						</div>
+		<!-- Footer -->
+		<footer class="px-5 py-12">
+			<div
+				class="flex flex-col gap-6 border-t border-line pt-10 sm:flex-row sm:items-center sm:justify-between"
+			>
+				<div>
+					<div class="font-semibold text-ink">boring computers</div>
+					<div class="mt-1 font-mono text-[12px] text-ink-faint">
+						Computers that are refreshingly boring.
 					</div>
-				</Chassis>
-			</div>
-		</div>
-	</section>
-
-	<!-- The lineup -->
-	<section class="px-5 py-12">
-		<h2 class="text-[13px] font-semibold tracking-wide text-ink-faint uppercase">The lineup</h2>
-		<div
-			class="mt-6 grid gap-px overflow-hidden rounded-geist-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3"
-		>
-			{#each PRODUCTS as p (p.name)}
-				<div class="flex flex-col bg-black p-6">
-					<h3 class="text-[15px] font-semibold text-ink">{p.name}</h3>
-					<p class="mt-2 text-[13px] leading-relaxed text-ink-muted">{p.desc}</p>
 				</div>
-			{/each}
-			<!-- filler so the empty grid cell stays black instead of showing the bg-line backdrop -->
-			<div class="hidden bg-black sm:block"></div>
-		</div>
-	</section>
-
-	<!-- How it works -->
-	<section class="px-5 py-12">
-		<h2 class="text-[13px] font-semibold tracking-wide text-ink-faint uppercase">How it works</h2>
-		<div class="mt-6 grid gap-8 sm:grid-cols-2">
-			{#each HOW as [title, body] (title)}
-				<div>
-					<h3 class="text-[15px] font-semibold text-ink">{title}</h3>
-					<p class="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{body}</p>
-				</div>
-			{/each}
-		</div>
-	</section>
-
-	<!-- Numbers -->
-	<section class="px-5 py-12">
-		<div class="grid gap-8 sm:grid-cols-3">
-			{#each STATS as [n, label] (label)}
-				<div>
-					<div class="text-[32px] font-semibold tracking-[-0.03em] text-ink">{n}</div>
-					<div class="mt-1 font-mono text-[12px] text-ink-faint">{label}</div>
-				</div>
-			{/each}
-		</div>
-	</section>
-
-	<!-- Run your own -->
-	<section class="px-5 py-12">
-		<div class="rounded-geist-lg border border-line bg-surface p-8">
-			<h2 class="text-[18px] font-semibold tracking-[-0.02em] text-ink">Run your own</h2>
-			<p class="mt-2 max-w-xl text-[13px] leading-relaxed text-ink-muted">
-				It's open source (Apache-2.0) and self-hosted — bring your own Anthropic + S3 keys, point it
-				at a Linux box with <code class="text-ink">/dev/kvm</code>, and deploy the site at your own
-				endpoint. Nothing phones home.
-			</p>
-			<div class="mt-5 flex flex-wrap items-center gap-3 font-mono text-[12px]">
-				<a
-					href={GITHUB}
-					target="_blank"
-					rel="noopener"
-					class="rounded-geist bg-ink px-3 py-1.5 font-semibold text-black transition-opacity hover:opacity-90"
-					>Fork on GitHub ↗</a
-				>
-				<a href={resolve('/docs')} class="text-ink-subtle transition-colors hover:text-ink"
-					>setup & API docs →</a
-				>
-			</div>
-		</div>
-	</section>
-
-	<!-- Footer -->
-	<footer class="px-5 py-12">
-		<div
-			class="flex flex-col gap-6 border-t border-line pt-10 sm:flex-row sm:items-center sm:justify-between"
-		>
-			<div>
-				<div class="font-semibold text-ink">boring computers</div>
-				<div class="mt-1 font-mono text-[12px] text-ink-faint">
-					Computers that are refreshingly boring.
+				<div class="flex items-center gap-5 font-mono text-[12px] text-ink-subtle">
+					<a href={resolve('/docs')} class="transition-colors hover:text-ink">Docs</a>
+					<a href={GITHUB} target="_blank" rel="noopener" class="transition-colors hover:text-ink"
+						>GitHub</a
+					>
 				</div>
 			</div>
-			<div class="flex items-center gap-5 font-mono text-[12px] text-ink-subtle">
-				<a href={resolve('/docs')} class="transition-colors hover:text-ink">Docs</a>
-				<a href={GITHUB} target="_blank" rel="noopener" class="transition-colors hover:text-ink"
-					>GitHub</a
-				>
-			</div>
-		</div>
-	</footer>
-</div>
+		</footer>
+	</div>
+{/if}
