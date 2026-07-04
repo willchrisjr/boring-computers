@@ -57,7 +57,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y --no-install-recommends \
   curl ca-certificates jq e2fsprogs iproute2 iptables cpio util-linux \
-  git build-essential file
+  git build-essential file debootstrap
 log "Dependencies installed."
 
 # --------------------------------------------------------------------------
@@ -85,6 +85,13 @@ fi
 # --------------------------------------------------------------------------
 log "Creating ${BORING_ROOT} layout..."
 mkdir -p "${BIN_DIR}" "${KERNEL_DIR}" "${ROOTFS_DIR}" "${RUN_DIR}" "${TEMPLATE_DIR}"
+
+# Jailer prerequisites: the chroot base + the unprivileged uid/gid the jailer
+# drops firecracker into (BORING_JAILER=1). Without these, jailed boots fail with
+# "Canonicalize(/srv/jailer)" / "fc.sock did not appear".
+mkdir -p /srv/jailer
+groupadd -g 991 boringjail 2>/dev/null || true
+useradd -u 30000 -g 991 -M -s /usr/sbin/nologin boringjail 2>/dev/null || true
 
 # --------------------------------------------------------------------------
 # 4. Install firecracker + jailer
