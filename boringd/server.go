@@ -55,7 +55,9 @@ func NewServer(cfg Config, mgr *Manager) *Server {
 
 	// Path-based preview: reverse-proxy a guest port (works over the tunnel /
 	// without wildcard DNS). Any method, sub-paths, and WS upgrades.
-	s.mux.Handle("/v1/machines/{id}/web/{port}/{path...}", s.auth(http.HandlerFunc(s.handleWebProxy)))
+	// No auth: previews are opened in new browser tabs (window.open) which can't
+	// add Authorization headers. The machine ID itself is the access token.
+	s.mux.HandleFunc("/v1/machines/{id}/web/{port}/{path...}", s.handleWebProxy)
 
 	// Persistent volumes (S3-backed). Registered only when storage is configured.
 	if s.storage != nil {

@@ -177,7 +177,7 @@
 		try {
 			machine = machineId
 				? await getMachine(machineId)
-				: await createMachine('desktop', ttl, false, volume);
+				: await createMachine('desktop', ttl, true, volume);
 			phase = 'connecting';
 			startCountdown();
 			void openTerminal(machine.id); // the serial shell is up early
