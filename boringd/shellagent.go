@@ -25,9 +25,9 @@ The computer has python3, pip, node, npm, git, curl and full internet access; yo
 
 Before each command, write ONE short, friendly, first-person sentence about what you're doing (e.g. "Writing the server file now." or "Installing express."). One sentence — don't over-explain.
 
-Create files with here-docs, e.g. cat > app.py <<'EOF' … EOF. Keep commands non-interactive (-y, --quiet) and NEVER block the terminal — run servers in the BACKGROUND with & .
+Write each file in ONE command — the whole file in a single cat > file <<'EOF' … EOF heredoc (or one printf). Do NOT append line-by-line; it wastes your limited steps. Keep commands non-interactive (-y, --quiet) and NEVER block the terminal — run servers in the BACKGROUND with & .
 
-If the goal is a web app, game, site, or server: build it as a self-contained page when possible, START a server in the BACKGROUND bound to 0.0.0.0 on a port (python3 may be absent — a tiny node http server is the safe choice, e.g. node -e 'require("http").createServer((q,r)=>{r.end(require("fs").readFileSync("index.html"))}).listen(8000,"0.0.0.0")' & — or python3 -m http.server 8000 --bind 0.0.0.0 & if python3 exists), curl localhost:<port> to confirm it responds, and then in your FINAL message include exactly PORT=<the port> on its own line — that gives the user a live, playable link.
+If the goal is a web app, game, site, or server: build it as a self-contained page when possible, START a server in the BACKGROUND bound to 0.0.0.0 on a port (python3 may be absent — a tiny node http server is the safe choice, e.g. node -e 'require("http").createServer((q,r)=>{r.end(require("fs").readFileSync("index.html"))}).listen(8000,"0.0.0.0")' & — or python3 -m http.server 8000 --bind 0.0.0.0 & if python3 exists), then curl localhost:<port> to confirm it responds. As SOON as it responds, output a line with exactly PORT=<the port> on its own — that immediately gives the user a live, playable link. Do this before any final summary.
 
 You have a limited number of steps — be efficient. When done, reply with one sentence starting with "Done:" and stop calling tools.`
 
@@ -173,6 +173,27 @@ func (s *Server) runShellAgent(w http.ResponseWriter, r *http.Request) {
 	send("done", "reached the step limit")
 }
 
+// writeConsoleChunked writes to the guest serial in small pieces with brief
+// pauses so the guest tty input buffer keeps up (a large single write overflows
+// it and garbles the command).
+func writeConsoleChunked(console *Console, s string) error {
+	const chunk = 128
+	b := []byte(s)
+	for i := 0; i < len(b); i += chunk {
+		end := i + chunk
+		if end > len(b) {
+			end = len(b)
+		}
+		if _, err := console.Write(b[i:end]); err != nil {
+			return err
+		}
+		if end < len(b) {
+			time.Sleep(15 * time.Millisecond)
+		}
+	}
+	return nil
+}
+
 // runGuestCommand types a command into the guest console and returns its output,
 // captured by watching for the shell prompt to reappear.
 func runGuestCommand(console *Console, sub *consoleSub, cmd string, timeout time.Duration) string {
@@ -185,7 +206,11 @@ func runGuestCommand(console *Console, sub *consoleSub, cmd string, timeout time
 		}
 		break
 	}
-	if _, err := console.Write([]byte(cmd + "\n")); err != nil {
+	// Write in small chunks with brief pauses: the guest tty input buffer
+	// overflows on a large single write (garbling big commands), which makes the
+	// agent fall back to many tiny appends and burn its step budget. Chunking lets
+	// it write a whole file in one command.
+	if err := writeConsoleChunked(console, cmd+"\n"); err != nil {
 		return "[the terminal is gone]"
 	}
 	var buf bytes.Buffer
@@ -248,7 +273,7 @@ func finalizeOutput(raw, cmd string) string {
 func callAnthropicShell(cfg Config, tool map[string]any, messages []json.RawMessage) (*apiResp, error) {
 	body := map[string]any{
 		"model":         cfg.AgentModel,
-		"max_tokens":    1024,
+		"max_tokens":    4096, // room to write a whole file in one command
 		"system":        shellAgentSystem,
 		"tools":         []any{tool},
 		"messages":      messages,
