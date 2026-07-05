@@ -32,6 +32,9 @@
 		{ s: 900, l: '15 min' }
 	];
 	let ttl = $state(300);
+	// Keep-alive: no auto-shutdown, runs until you close it. Honored only when the
+	// server has BORING_ALLOW_PERSISTENT=1; otherwise it falls back to the TTL.
+	let persistent = $state(false);
 
 	const PRODUCTS = [
 		{
@@ -125,14 +128,27 @@
 						<div class="flex flex-wrap gap-1">
 							{#each LENGTHS as opt (opt.s)}
 								<button
-									onclick={() => (ttl = opt.s)}
-									class="rounded-full border px-2.5 py-0.5 transition-colors {ttl === opt.s
+									onclick={() => {
+										ttl = opt.s;
+										persistent = false;
+									}}
+									class="rounded-full border px-2.5 py-0.5 transition-colors {ttl === opt.s &&
+									!persistent
 										? 'border-white/25 bg-white/10 text-ink'
 										: 'border-line text-ink-faint hover:text-ink-muted'}"
 								>
 									{opt.l}
 								</button>
 							{/each}
+							<button
+								onclick={() => (persistent = true)}
+								title="No auto-shutdown — runs until you close it"
+								class="rounded-full border px-2.5 py-0.5 transition-colors {persistent
+									? 'border-white/25 bg-white/10 text-ink'
+									: 'border-line text-ink-faint hover:text-ink-muted'}"
+							>
+								∞ keep alive
+							</button>
 						</div>
 					</div>
 
@@ -175,7 +191,7 @@
 			<div class="w-full">
 				<Chassis on={launched}>
 					{#if launched}
-						<Workstation {ttl} volume={restore} onClose={() => (launched = false)} />
+						<Workstation {ttl} {persistent} volume={restore} onClose={() => (launched = false)} />
 					{:else}
 						<!-- powered-down screen: click it (or press enter) to boot -->
 						<button

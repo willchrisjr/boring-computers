@@ -94,8 +94,12 @@ EOF
 
 log "Writing config (secrets not printed)…"
 ADDR="0.0.0.0:8080"; [[ "${BIND_LOCALHOST:-}" == "1" ]] && ADDR="127.0.0.1:8080"
+# Private (localhost-bound) installs are single-owner, so no-TTL machines are
+# safe to allow; a public bind leaves it off so it can't be drained.
+ALLOW_PERSISTENT=0; [[ "${BIND_LOCALHOST:-}" == "1" ]] && ALLOW_PERSISTENT=1
 "${SSH[@]}" "install -d -m0755 /etc/boring && umask 077 && cat > /etc/boring/boringd.env" <<EOF
 BORING_ADDR=${ADDR}
+BORING_ALLOW_PERSISTENT=${ALLOW_PERSISTENT}
 BORING_JAILER=1
 BORING_NET=1
 BORING_TOKEN=${BORING_TOKEN:-}

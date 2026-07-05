@@ -71,7 +71,8 @@ export async function createMachine(
 	template: string,
 	ttlSeconds: number,
 	net = false,
-	volume?: string
+	volume?: string,
+	persistent = false
 ): Promise<Machine> {
 	const attempts = 3;
 	let last = 'the datacenter is busy — try again in a moment';
@@ -86,7 +87,7 @@ export async function createMachine(
 				res = await fetch(`${apiBase}/v1/machines`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ template, ttl_seconds: ttlSeconds, net, volume }),
+					body: JSON.stringify({ template, ttl_seconds: ttlSeconds, net, volume, persistent }),
 					signal: ctrl.signal
 				});
 			} finally {
@@ -114,6 +115,7 @@ export type Machine = {
 	boot_ms: number;
 	expires_at?: string;
 	display?: boolean;
+	persistent?: boolean;
 };
 
 /** Fetch an existing machine by id (for reconnecting to a shared session). */

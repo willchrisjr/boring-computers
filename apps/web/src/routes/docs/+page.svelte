@@ -71,7 +71,9 @@ curl -s -X POST ${API}/v1/machines \\
 			class="text-ink">npm</code
 		>/<code class="text-ink">apk</code> install work). Guests are NAT'd and egress-firewalled. File
 		transfer and previews (below) need a connected machine — a desktop, or a shell with
-		<code class="text-ink">net</code>.
+		<code class="text-ink">net</code>. Pass <code class="text-ink">"persistent": true</code> for a
+		machine with no TTL (runs until you delete it) — honored only when the server sets
+		<code class="text-ink">BORING_ALLOW_PERSISTENT=1</code>, else it falls back to the TTL.
 	</p>
 
 	<h2 class="mt-12 text-[15px] font-semibold text-ink">WebSockets</h2>

@@ -161,8 +161,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 type createRequest struct {
 	Template   string `json:"template"`
 	TTLSeconds int    `json:"ttl_seconds"`
-	Net        bool   `json:"net"`    // request internet (forces a cold boot)
-	Volume     string `json:"volume"` // restore this volume into /root on boot
+	Net        bool   `json:"net"`        // request internet (forces a cold boot)
+	Volume     string `json:"volume"`     // restore this volume into /root on boot
+	Persistent bool   `json:"persistent"` // no TTL — run until stopped (needs BORING_ALLOW_PERSISTENT)
 }
 
 func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +178,7 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		req.Template = "python"
 	}
 
-	m, err := s.mgr.Create(req.Template, req.TTLSeconds, req.Net, clientIP(r, s.cfg.TrustProxy))
+	m, err := s.mgr.Create(req.Template, req.TTLSeconds, req.Net, req.Persistent, clientIP(r, s.cfg.TrustProxy))
 	if err != nil {
 		if errors.Is(err, ErrTooManyMachines) || errors.Is(err, ErrRateLimited) {
 			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error()})

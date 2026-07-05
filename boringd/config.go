@@ -39,6 +39,11 @@ type Config struct {
 	MinTTL     int
 	MaxTTL     int
 
+	// AllowPersistent lets a request opt out of the TTL entirely (a machine that
+	// runs until explicitly stopped). Off by default so a public instance can't be
+	// drained by never-expiring machines; self-hosters set BORING_ALLOW_PERSISTENT=1.
+	AllowPersistent bool
+
 	// Guest machine sizing.
 	VCPUs     int
 	MemSizeMB int
@@ -112,6 +117,7 @@ func LoadConfig() Config {
 		Token:               os.Getenv("BORING_TOKEN"),
 		CORSOrigin:          os.Getenv("BORING_CORS_ORIGIN"),
 		MaxMachines:         envInt("BORING_MAX", 20),
+		AllowPersistent:     os.Getenv("BORING_ALLOW_PERSISTENT") == "1",
 		MemReserveMB:        envInt("BORING_MEM_RESERVE_MB", 3072),
 		FirecrackerBin:      envStr("BORING_FIRECRACKER_BIN", "/opt/boring/bin/firecracker"),
 		KernelPath:          envStr("BORING_KERNEL", "/opt/boring/kernel/vmlinux"),

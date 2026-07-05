@@ -79,7 +79,7 @@ func (mgr *Manager) warmDesktop() {
 
 // claimPooled hands a ready pooled desktop to a user, re-timed to their TTL.
 // Returns nil if the pool is empty.
-func (mgr *Manager) claimPooled(creatorIP string, ttl int) *Machine {
+func (mgr *Manager) claimPooled(creatorIP string, ttl int, persistent bool) *Machine {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if len(mgr.pool) == 0 {
@@ -89,12 +89,16 @@ func (mgr *Manager) claimPooled(creatorIP string, ttl int) *Machine {
 	mgr.pool = mgr.pool[1:]
 	m.pooled = false
 	m.creatorIP = creatorIP
+	m.Persistent = persistent
 	m.ExpiresAt = time.Now().Add(time.Duration(ttl) * time.Second)
 	if m.timer != nil {
 		m.timer.Stop()
+		m.timer = nil
 	}
-	id := m.ID
-	m.timer = time.AfterFunc(time.Until(m.ExpiresAt), func() { mgr.reap(id) })
+	if !persistent {
+		id := m.ID
+		m.timer = time.AfterFunc(time.Until(m.ExpiresAt), func() { mgr.reap(id) })
+	}
 	m.BootMS = 0
 	m.Mode = "warm"
 	return m

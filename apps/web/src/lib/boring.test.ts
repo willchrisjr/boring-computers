@@ -185,7 +185,8 @@ describe('createMachine', () => {
 			template: 'python',
 			ttl_seconds: 60,
 			net: true,
-			volume: 'vol-1'
+			volume: 'vol-1',
+			persistent: false
 		});
 	});
 

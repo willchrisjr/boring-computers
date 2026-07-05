@@ -26,8 +26,15 @@
 		onClose,
 		ttl = 300,
 		machineId,
-		volume
-	}: { onClose?: () => void; ttl?: number; machineId?: string; volume?: string } = $props();
+		volume,
+		persistent = false
+	}: {
+		onClose?: () => void;
+		ttl?: number;
+		machineId?: string;
+		volume?: string;
+		persistent?: boolean;
+	} = $props();
 
 	let phase = $state<Phase>('booting');
 	let machine = $state<Machine | null>(null);
@@ -175,9 +182,10 @@
 		try {
 			machine = machineId
 				? await getMachine(machineId)
-				: await createMachine('desktop', ttl, true, volume);
+				: await createMachine('desktop', ttl, true, volume, persistent);
 			phase = 'connecting';
-			timer.start(machine);
+			// A persistent machine has no expiry, so don't run a countdown.
+			if (!machine.persistent) timer.start(machine);
 			void openTerminal(machine.id);
 			const painted = machineId || machine.mode === 'warm';
 			setTimeout(doConnectVNC, painted ? 400 : 4500);
@@ -391,7 +399,11 @@
 						>preview ↗</button
 					>
 				</span>
-				<span class="tabular-nums">{remaining}s</span>
+				<span
+					class="tabular-nums"
+					title={machine?.persistent ? 'no auto-shutdown' : 'self-destructs'}
+					>{machine?.persistent ? '∞ stays up' : `${remaining}s`}</span
+				>
 				<button
 					class="text-ink-subtle transition-colors hover:text-ink disabled:opacity-40"
 					onclick={save}

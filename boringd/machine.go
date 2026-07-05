@@ -33,6 +33,10 @@ type Machine struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 
+	// Persistent machines have no TTL: no reap timer is armed, so they run until
+	// explicitly deleted (or boringd restarts). Gated by cfg.AllowPersistent.
+	Persistent bool
+
 	// creatorIP holds the limiter slot to release when the machine dies.
 	creatorIP string
 
@@ -48,27 +52,33 @@ type Machine struct {
 
 // machineView is the JSON-serialisable public shape from the contract.
 type machineView struct {
-	ID        string `json:"id"`
-	Status    string `json:"status"`
-	Mode      string `json:"mode"`
-	BootMS    int64  `json:"boot_ms"`
-	Template  string `json:"template"`
-	Display   bool   `json:"display"`
-	CreatedAt string `json:"created_at"`
-	ExpiresAt string `json:"expires_at"`
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	Mode       string `json:"mode"`
+	BootMS     int64  `json:"boot_ms"`
+	Template   string `json:"template"`
+	Display    bool   `json:"display"`
+	CreatedAt  string `json:"created_at"`
+	ExpiresAt  string `json:"expires_at"` // "" when the machine is persistent
+	Persistent bool   `json:"persistent,omitempty"`
 }
 
 // View returns the JSON view of the machine.
 func (m *Machine) View() machineView {
+	expires := ""
+	if !m.Persistent {
+		expires = m.ExpiresAt.UTC().Format(time.RFC3339)
+	}
 	return machineView{
-		ID:        m.ID,
-		Status:    m.Status,
-		Mode:      m.Mode,
-		BootMS:    m.BootMS,
-		Template:  m.Template,
-		Display:   m.Display,
-		CreatedAt: m.CreatedAt.UTC().Format(time.RFC3339),
-		ExpiresAt: m.ExpiresAt.UTC().Format(time.RFC3339),
+		ID:         m.ID,
+		Status:     m.Status,
+		Mode:       m.Mode,
+		BootMS:     m.BootMS,
+		Template:   m.Template,
+		Display:    m.Display,
+		CreatedAt:  m.CreatedAt.UTC().Format(time.RFC3339),
+		ExpiresAt:  expires,
+		Persistent: m.Persistent,
 	}
 }
 
@@ -218,8 +228,9 @@ func (mgr *Manager) hasMemoryFor(tpl Template) bool {
 
 // Create boots a new microVM from the given template with the (clamped) TTL.
 // creatorIP is used for per-IP rate/concurrency limiting on the public endpoint.
-func (mgr *Manager) Create(template string, ttlSeconds int, net bool, creatorIP string) (*Machine, error) {
+func (mgr *Manager) Create(template string, ttlSeconds int, net, persistent bool, creatorIP string) (*Machine, error) {
 	ttl := mgr.cfg.ClampTTL(ttlSeconds)
+	persistent = persistent && mgr.cfg.AllowPersistent
 
 	// Per-IP rate + concurrency cap (released in teardown).
 	if err := mgr.limiter.Acquire(creatorIP); err != nil {
@@ -228,9 +239,13 @@ func (mgr *Manager) Create(template string, ttlSeconds int, net bool, creatorIP 
 
 	// Instant desktop: hand over a pre-booted one from the warm pool if ready.
 	if mgr.cfg.Template(template).Display && mgr.cfg.DesktopPool > 0 {
-		if m := mgr.claimPooled(creatorIP, ttl); m != nil {
+		if m := mgr.claimPooled(creatorIP, ttl, persistent); m != nil {
 			go mgr.refillPool()
-			log.Printf("machine %s claimed from warm pool (ttl=%ds ip=%s)", m.ID, ttl, creatorIP)
+			life := fmt.Sprintf("ttl=%ds", ttl)
+			if persistent {
+				life = "persistent"
+			}
+			log.Printf("machine %s claimed from warm pool (%s ip=%s)", m.ID, life, creatorIP)
 			return m, nil
 		}
 	}
@@ -246,13 +261,14 @@ func (mgr *Manager) Create(template string, ttlSeconds int, net bool, creatorIP 
 	id := mgr.newID()
 	now := time.Now()
 	m := &Machine{
-		ID:        id,
-		Status:    "booting",
-		Template:  tpl.Name,
-		Display:   tpl.Display,
-		creatorIP: creatorIP,
-		CreatedAt: now,
-		ExpiresAt: now.Add(time.Duration(ttl) * time.Second),
+		ID:         id,
+		Status:     "booting",
+		Template:   tpl.Name,
+		Display:    tpl.Display,
+		creatorIP:  creatorIP,
+		CreatedAt:  now,
+		ExpiresAt:  now.Add(time.Duration(ttl) * time.Second),
+		Persistent: persistent,
 	}
 	// Insert a placeholder so the slot is held and the id is unique.
 	mgr.machines[id] = m
@@ -290,10 +306,16 @@ func (mgr *Manager) Create(template string, ttlSeconds int, net bool, creatorIP 
 	m.Mode = mode
 	m.BootMS = bootMS
 	m.Status = "running"
-	m.timer = time.AfterFunc(time.Until(m.ExpiresAt), func() { mgr.reap(id) })
+	if !persistent {
+		m.timer = time.AfterFunc(time.Until(m.ExpiresAt), func() { mgr.reap(id) })
+	}
 	mgr.mu.Unlock()
 
-	log.Printf("machine %s created (mode=%s boot_ms=%d ttl=%ds ip=%s)", id, mode, bootMS, ttl, creatorIP)
+	ttlDesc := fmt.Sprintf("%ds", ttl)
+	if persistent {
+		ttlDesc = "persistent"
+	}
+	log.Printf("machine %s created (mode=%s boot_ms=%d ttl=%s ip=%s)", id, mode, bootMS, ttlDesc, creatorIP)
 	return m, nil
 }
 
