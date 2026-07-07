@@ -4,9 +4,11 @@ An [MCP](https://modelcontextprotocol.io) server that lets any AI spin up and
 drive a real Linux computer — a Firecracker microVM from
 [boring computers](https://boringcomputers.com).
 
-Tools: `launch_computer`, `run_task` (give it a plain-English task and an agent
-writes + runs the code, returning a live preview URL if it starts a server),
-`screenshot`, `preview_url`, `fork_computer`, `list_computers`, `stop_computer`.
+Tools: `launch_computer`, `run_command` (run one shell command, get output +
+exit code back — deterministic, no agent), `run_task` (give it a plain-English
+task and an agent writes + runs the code, returning a live preview URL if it
+starts a server), `screenshot`, `preview_url`, `fork_computer`,
+`list_computers`, `stop_computer`.
 
 It talks to **your own boringd** — there is no public hosted endpoint. Set
 `BORING_URL` to wherever yours runs (defaults to `http://localhost:8080`, which

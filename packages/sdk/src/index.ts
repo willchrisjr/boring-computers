@@ -56,6 +56,21 @@ export type MachineStatus = Machine['status'];
 /** A persistent volume (S3-backed storage that outlives a machine). */
 export type Volume = Schema.Schema.Type<typeof VolumeSchema>;
 
+const ExecResultSchema = Schema.Struct({
+	output: Schema.String,
+	exit_code: Schema.NullOr(Schema.Number),
+	timed_out: Schema.Boolean,
+	duration_ms: Schema.Number
+});
+
+/** The result of running one command via {@link BoringClient.exec}. */
+export type ExecResult = Schema.Schema.Type<typeof ExecResultSchema>;
+
+export interface ExecOptions {
+	/** Seconds before the command is abandoned (default 30, max 120). */
+	readonly timeoutSeconds?: number;
+}
+
 export interface CreateMachineOptions {
 	readonly template?: string;
 	readonly ttlSeconds?: number;
@@ -105,6 +120,16 @@ export interface BoringClient {
 	readonly getMachine: (id: string) => Effect.Effect<Machine, BoringError>;
 	readonly destroyMachine: (id: string) => Effect.Effect<void, BoringError>;
 	readonly branchMachine: (id: string) => Effect.Effect<Machine, BoringError>;
+	/**
+	 * Run one shell command in the machine and get `{output, exit_code}` back —
+	 * deterministic, no TTY. A 409 means the console is busy (another exec or an
+	 * agent run); `exit_code` is `null` when the command timed out.
+	 */
+	readonly exec: (
+		id: string,
+		command: string,
+		opts?: ExecOptions
+	) => Effect.Effect<ExecResult, BoringError>;
 	/** Open a serial console. The socket is closed when the enclosing `Scope` closes. */
 	readonly connectTty: (id: string) => Effect.Effect<TtyChannel, RequestError, Scope.Scope>;
 	/** Create a persistent volume (storage that outlives a machine). */
@@ -234,6 +259,12 @@ export const make = (options: BoringClientOptions = {}): BoringClient => {
 		destroyMachine: (id) => request('DELETE', `/v1/machines/${encodeURIComponent(id)}`, null),
 		branchMachine: (id) =>
 			request('POST', `/v1/machines/${encodeURIComponent(id)}/branch`, MachineSchema),
+		// No retry: a command is not idempotent.
+		exec: (id, command, opts = {}) =>
+			request('POST', `/v1/machines/${encodeURIComponent(id)}/exec`, ExecResultSchema, {
+				command,
+				...(opts.timeoutSeconds !== undefined ? { timeout_seconds: opts.timeoutSeconds } : {})
+			}),
 		connectTty
 	};
 };

@@ -269,6 +269,40 @@ describe('volumes', () => {
 	});
 });
 
+describe('exec', () => {
+	const RESULT = { output: 'hi', exit_code: 0, timed_out: false, duration_ms: 42 } as const;
+
+	it('POSTs the command and decodes the result', async () => {
+		fetchMock.mockResolvedValue(ok(RESULT));
+
+		const res = await Effect.runPromise(make().exec('m1', 'echo hi'));
+
+		expect(res).toEqual(RESULT);
+		expect(calledUrl()).toBe('http://localhost:8080/v1/machines/m1/exec');
+		expect(calledInit().method).toBe('POST');
+		expect(JSON.parse(calledBody())).toEqual({ command: 'echo hi' });
+	});
+
+	it('sends timeout_seconds when provided and accepts a null exit code', async () => {
+		fetchMock.mockResolvedValue(ok({ ...RESULT, exit_code: null, timed_out: true }));
+
+		const res = await Effect.runPromise(make().exec('m1', 'sleep 99', { timeoutSeconds: 5 }));
+
+		expect(res.exit_code).toBeNull();
+		expect(res.timed_out).toBe(true);
+		expect(JSON.parse(calledBody())).toEqual({ command: 'sleep 99', timeout_seconds: 5 });
+	});
+
+	it('does not retry (commands are not idempotent) and surfaces the busy 409', async () => {
+		fetchMock.mockResolvedValue(err(409, 'machine console is busy'));
+
+		const failure = await failureOf(make().exec('m1', 'echo hi'));
+
+		expect(failure).toMatchObject({ _tag: 'ResponseError', status: 409 });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe('saveMachine', () => {
 	it('POSTs to /save with the volume query param', async () => {
 		fetchMock.mockResolvedValue(empty());

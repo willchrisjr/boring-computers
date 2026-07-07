@@ -77,6 +77,20 @@ const TOOLS = [
 		}
 	},
 	{
+		name: 'run_command',
+		description:
+			'Run one shell command in the computer and get its output and exit code back — deterministic, no agent in the loop. Use this to drive the machine yourself; use run_task only when you want an agent to figure out the steps.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				id: { type: 'string' },
+				command: { type: 'string', description: 'the shell command to run' },
+				timeout_seconds: { type: 'number', description: 'give up after this long (default 30, max 120)' }
+			},
+			required: ['id', 'command']
+		}
+	},
+	{
 		name: 'run_task',
 		description:
 			'Give the computer a natural-language task; an agent writes and runs commands to do it (installing packages, building + serving apps, etc.). If it starts a web server it returns a live preview URL.',
@@ -166,6 +180,13 @@ async function dispatch(name, a) {
 		case 'save_computer': {
 			await run(boring.saveMachine(a.id, a.volume));
 			return text(`Saved ${a.id} into volume ${a.volume}. Launch a new computer with that volume to restore it.`);
+		}
+		case 'run_command': {
+			const r = await run(
+				boring.exec(a.id, a.command, a.timeout_seconds ? { timeoutSeconds: a.timeout_seconds } : undefined)
+			);
+			if (r.timed_out) return text(`(timed out after ${r.duration_ms}ms — still running in the machine)\n${r.output}`);
+			return text(`exit ${r.exit_code} (${r.duration_ms}ms)\n${r.output}`);
 		}
 		case 'run_task': {
 			const { log, preview, note } = await runTask(a.id, a.task);

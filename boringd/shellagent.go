@@ -50,11 +50,18 @@ func (s *Server) runShellAgent(w http.ResponseWriter, r *http.Request) {
 		goal = goal[:400]
 	}
 
-	console, ok := s.mgr.Console(id)
+	console, consoleLock, ok := s.mgr.ConsoleLock(id)
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
 		return
 	}
+	// Exclusive console access for the whole run — a concurrent /exec would
+	// garble the serial line (and vice versa).
+	if !consoleLock.TryLock() {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "machine console is busy (an exec or another agent is running)"})
+		return
+	}
+	defer consoleLock.Unlock()
 
 	guard := s.setupAgentGuard(w, r)
 	if guard == nil {

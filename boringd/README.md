@@ -3,7 +3,7 @@
 Control plane for **boring computers** — a Firecracker microVM sandbox platform.
 
 `boringd` is a single Go binary that manages Firecracker microVMs on one bare-metal
-Ubuntu 24.04 x86_64 host with `/dev/kvm`. It exposes a REST API to create/list/delete/fork
+Ubuntu 24.04 host (x86_64 or arm64) with `/dev/kvm`. It exposes a REST API to create/list/delete/fork
 microVMs, WebSocket endpoints for a live serial shell, a VNC desktop, and AI agents that
 drive them, plus guest internet, port previews, file transfer, and an OpenAI-compatible
 inference gateway.
@@ -39,6 +39,7 @@ from a live snapshot) are best-effort optimizations that fall back cleanly.
 | GET | `/v1/machines` | `{"machines":[...]}` |
 | GET | `/v1/machines/{id}` | machine or 404 |
 | DELETE | `/v1/machines/{id}` | 204 or 404 |
+| POST | `/v1/machines/{id}/exec` | body `{"command":"…","timeout_seconds":30}` → `{"output","exit_code","timed_out","duration_ms"}` (409 while an exec/agent holds the console) |
 | POST | `/v1/machines/{id}/branch` | live fork → machine (501 if snapshot unavailable) |
 | GET | `/v1/machines/{id}/screenshot` | PNG of a desktop machine |
 | POST | `/v1/machines/{id}/upload` | upload a file to `/root` (`X-Filename` header) |

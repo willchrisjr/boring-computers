@@ -50,6 +50,10 @@ func NewServer(cfg Config, mgr *Manager) *Server {
 	s.mux.Handle("DELETE /v1/machines/{id}", s.auth(http.HandlerFunc(s.handleDelete)))
 	s.mux.Handle("POST /v1/machines/{id}/branch", s.auth(http.HandlerFunc(s.handleBranch)))
 
+	// Deterministic command execution (no TTY, no LLM): run one command, get
+	// {output, exit_code} back as JSON.
+	s.mux.Handle("POST /v1/machines/{id}/exec", s.auth(http.HandlerFunc(s.handleExec)))
+
 	// File transfer over the guest serial console.
 	s.mux.Handle("POST /v1/machines/{id}/upload", s.auth(http.HandlerFunc(s.handleUpload)))
 	s.mux.Handle("GET /v1/machines/{id}/download", s.auth(http.HandlerFunc(s.handleDownload)))

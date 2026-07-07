@@ -48,6 +48,10 @@ type Machine struct {
 
 	// timer fires at ExpiresAt to reap the machine.
 	timer *time.Timer
+
+	// consoleMu serialises exclusive console users (exec, the terminal agent):
+	// the serial line is shared state, and two concurrent writers garble both.
+	consoleMu sync.Mutex
 }
 
 // machineView is the JSON-serialisable public shape from the contract.
@@ -181,6 +185,18 @@ func (mgr *Manager) Console(id string) (*Console, bool) {
 		return nil, false
 	}
 	return m.driver.Console(), true
+}
+
+// ConsoleLock returns the machine's console together with its exclusive-user
+// lock (see Machine.consoleMu). Callers TryLock it around command injection.
+func (mgr *Manager) ConsoleLock(id string) (*Console, *sync.Mutex, bool) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	m, ok := mgr.machines[id]
+	if !ok || m.driver == nil {
+		return nil, nil, false
+	}
+	return m.driver.Console(), &m.consoleMu, true
 }
 
 // DialVsock opens a stream to a guest vsock port for the machine (used by the
