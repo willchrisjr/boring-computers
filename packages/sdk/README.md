@@ -1,4 +1,4 @@
-# @boring/sdk
+# boring-computers-sdk
 
 An [Effect](https://effect.website)-native TypeScript client for the **boring
 computers** Firecracker microVM API (`boringd`). REST calls go through
@@ -6,20 +6,20 @@ computers** Firecracker microVM API (`boringd`). REST calls go through
 call is an `Effect` with typed errors; the serial console is a `Stream` with
 `Scope`-based teardown.
 
-> Lives in the monorepo — not published to npm. Build it and import from `dist/`.
-
-## Build
+## Install
 
 ```sh
-npm install                     # once, at the repo root
-npm run build -w @boring/sdk    # tsc -> dist/
+npm install boring-computers-sdk
 ```
+
+(Or from the monorepo: `npm install` at the root, then
+`npm run build -w boring-computers-sdk` → `dist/`.)
 
 ## Usage
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { make } from '@boring/sdk';
+import { make } from 'boring-computers-sdk';
 
 const boring = make({ baseUrl: 'http://localhost:8080' });
 
@@ -57,6 +57,9 @@ Prefer dependency injection? Use `layer({ baseUrl })` and the `BoringClient` tag
 - `layer({ baseUrl?, token? })` + `BoringClient` tag — the same, as a `Layer`
 - `createMachine(opts?: { template?, ttlSeconds?, net? }): Effect<Machine, BoringError>`
   — retries transient failures internally
+- `exec(id, command, { timeoutSeconds? }): Effect<ExecResult, BoringError>` —
+  run one command, get `{ output, exit_code, timed_out, duration_ms }`
+- `extendMachine(id, ttlSeconds?): Effect<Machine, BoringError>` — reset the TTL
 - `listMachines: Effect<Machine[], BoringError>`
 - `getMachine(id) / branchMachine(id): Effect<Machine, BoringError>`
 - `destroyMachine(id): Effect<void, BoringError>`

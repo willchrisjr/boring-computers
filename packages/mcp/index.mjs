@@ -13,7 +13,7 @@ import {
 	ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 import { Effect } from 'effect';
-import { make } from '@boring/sdk';
+import { make } from 'boring-computers-sdk';
 
 const BASE = process.env.BORING_URL || 'http://localhost:8080';
 const WSBASE = BASE.replace(/^http/, 'ws');

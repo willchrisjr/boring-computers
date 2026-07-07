@@ -1,4 +1,4 @@
-# @boring/mcp
+# boring-computers-mcp
 
 An [MCP](https://modelcontextprotocol.io) server that lets any AI spin up and
 drive a real Linux computer — a Firecracker microVM from
@@ -16,27 +16,25 @@ is right if boringd is on the same machine or reached over an SSH tunnel; the
 Mac/Lima local setup forwards to `http://localhost:8088`). If your boringd sets
 `BORING_TOKEN`, pass the same value so the server can authenticate.
 
-> Not published to npm yet — run it from source.
-
 ## Run
 
 ```bash
-git clone https://github.com/michaelshimeles/boring-computers
-cd boring-computers && npm install
-BORING_URL=http://localhost:8080 node packages/mcp/index.mjs
+BORING_URL=http://localhost:8080 npx boring-computers-mcp
 ```
 
-## Claude Desktop
+(Or from the monorepo source: `node packages/mcp/index.mjs`.)
 
-Add to `claude_desktop_config.json`, then ask _"launch a computer and build me a
-snake game."_
+## Claude Desktop / Cursor
+
+Add to `claude_desktop_config.json` (or Cursor's MCP settings), then ask
+_"launch a computer and build me a snake game."_
 
 ```json
 {
 	"mcpServers": {
 		"boring-computers": {
-			"command": "node",
-			"args": ["/absolute/path/to/boring-computers/packages/mcp/index.mjs"],
+			"command": "npx",
+			"args": ["-y", "boring-computers-mcp"],
 			"env": { "BORING_URL": "http://localhost:8080" }
 		}
 	}

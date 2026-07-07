@@ -1,6 +1,6 @@
 /**
- * @boring/sdk — Effect-native TypeScript client for the boring computers
- * Firecracker microVM API.
+ * boring-computers-sdk — Effect-native TypeScript client for the boring
+ * computers Firecracker microVM API.
  *
  * REST calls go through `@effect/platform`'s `HttpClient` and validate responses
  * with `Schema`; errors are tagged; the serial console is a `Stream` with
@@ -147,7 +147,7 @@ export interface BoringClient {
 	readonly saveMachine: (machineId: string, volumeId: string) => Effect.Effect<void, BoringError>;
 }
 
-export const BoringClient = Context.GenericTag<BoringClient>('@boring/sdk/BoringClient');
+export const BoringClient = Context.GenericTag<BoringClient>('boring-computers-sdk/BoringClient');
 
 /** A `Layer` providing {@link BoringClient} from static options. */
 export const layer = (options: BoringClientOptions = {}): Layer.Layer<BoringClient> =>

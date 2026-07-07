@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Interactive demo for @boring/sdk (Effect).
+// Interactive demo for boring-computers-sdk (Effect).
 //
 //   BORING_URL=http://localhost:8080 node demo.mjs
 //

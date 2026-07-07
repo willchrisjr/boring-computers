@@ -76,10 +76,24 @@ npm run dev -w web
 private), `SKIP_DESKTOP=1` (skip the ~8-min desktop image). Full REST + WebSocket
 API in the [docs](https://boringcomputers.com/docs).
 
-**From any AI** — an MCP server ([`packages/mcp`](packages/mcp)) lets Claude
-Desktop, Cursor, and other agents spin up and drive your computers as a tool.
-There's also a small Effect-native TypeScript client
-([`packages/sdk`](packages/sdk)). Both run from source (not on npm).
+**From any AI** — an MCP server
+([`boring-computers-mcp`](packages/mcp)) lets Claude Desktop, Cursor, and other
+agents spin up and drive your computers as a tool:
+
+```json
+{
+	"mcpServers": {
+		"boring-computers": {
+			"command": "npx",
+			"args": ["-y", "boring-computers-mcp"],
+			"env": { "BORING_URL": "http://localhost:8080" }
+		}
+	}
+}
+```
+
+There's also an Effect-native TypeScript client,
+[`boring-computers-sdk`](packages/sdk) (`npm install boring-computers-sdk`).
 
 ## How it works
 
@@ -97,8 +111,8 @@ A [Turborepo](https://turbo.build/repo) monorepo (npm workspaces):
 ```
 apps/web/          the site — SvelteKit
 boringd/           the control plane — Go, runs the microVMs
-packages/sdk/      @boring/sdk — Effect-native TypeScript client
-packages/mcp/      @boring/mcp — MCP server
+packages/sdk/      boring-computers-sdk — Effect-native TypeScript client
+packages/mcp/      boring-computers-mcp — MCP server
 infra/setup.sh     one-command host setup (any Ubuntu + KVM box)
 infra/latitude/    rootfs/kernel/image builds, networking, Caddy, Latitude helpers
 ```

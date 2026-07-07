@@ -1,7 +1,23 @@
 {
-	"name": "@boring/mcp",
+	"name": "boring-computers-mcp",
 	"version": "0.1.0",
 	"description": "Model Context Protocol server for boring computers — let any AI spin up and drive a real computer.",
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/michaelshimeles/boring-computers.git",
+		"directory": "packages/mcp"
+	},
+	"homepage": "https://github.com/michaelshimeles/boring-computers#readme",
+	"keywords": [
+		"mcp",
+		"model-context-protocol",
+		"firecracker",
+		"microvm",
+		"sandbox",
+		"ai",
+		"agents"
+	],
 	"type": "module",
 	"bin": {
 		"boring-mcp": "index.mjs"
@@ -15,7 +31,7 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",
-		"@boring/sdk": "*",
+		"boring-computers-sdk": "^0.1.0",
 		"effect": "^3.12.0"
 	}
 }

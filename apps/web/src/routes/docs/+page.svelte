@@ -166,7 +166,7 @@ curl -s -X POST ${API}/v1/machines \\
 	</p>
 	<div class="mt-3">
 		{@render code(`import { Effect, Stream } from 'effect';
-import { make } from '@boring/sdk';
+import { make } from 'boring-computers-sdk';
 
 const boring = make({ baseUrl: '${API}' });
 

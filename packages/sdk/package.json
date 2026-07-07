@@ -1,7 +1,22 @@
 {
-	"name": "@boring/sdk",
-	"private": true,
-	"version": "0.0.0",
+	"name": "boring-computers-sdk",
+	"version": "0.1.0",
+	"description": "Effect-native TypeScript client for boring computers — on-demand Firecracker microVMs you can hand to an AI.",
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/michaelshimeles/boring-computers.git",
+		"directory": "packages/sdk"
+	},
+	"homepage": "https://github.com/michaelshimeles/boring-computers#readme",
+	"keywords": [
+		"firecracker",
+		"microvm",
+		"sandbox",
+		"ai",
+		"agents",
+		"effect"
+	],
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -11,13 +26,18 @@
 			"default": "./dist/index.js"
 		}
 	},
+	"files": [
+		"dist",
+		"README.md"
+	],
 	"prettier": "@boring/prettier-config",
 	"scripts": {
 		"check": "tsc --noEmit",
 		"build": "tsc",
 		"test": "vitest run",
 		"lint": "prettier --check .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
 		"effect": "^3.12.0",
